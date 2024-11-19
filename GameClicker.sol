@@ -11,7 +11,6 @@ contract GameClicker {
     constructor(address token) {
         DZBToken = IERC20(token);
         owner = msg.sender;
-        DZBToken.approve(address(this), DZBToken.balanceOf(msg.sender));
     }
 
     uint public clikAllUsers = 1;
@@ -21,7 +20,7 @@ contract GameClicker {
         string name;
         uint balance;
         uint countClick;
-        uint clickPay;
+        uint clickMultiplier;
         uint withdraw;
         uint lastClickTime;
         address referal;
@@ -37,14 +36,17 @@ contract GameClicker {
         _;
     }
 
+    // checking the last click's value and the logic of increasing the balance from clicks and its multiplier
     modifier checkTimeClick() {
         User storage user = users[msg.sender];
         if (block.timestamp <= user.lastClickTime + 10) {
             user.countClick += 2;
             clikAllUsers += 2;
+            user.balance += 2 * user.clickMultiplier * 2;
         } else {
             user.countClick += 1;
             clikAllUsers += 1;
+            user.balance += 1 + user.clickMultiplier;
         }
 
         user.lastClickTime = block.timestamp;
@@ -64,19 +66,21 @@ contract GameClicker {
 
     function Register(string memory name) public {
         uint balance = users[msg.sender].balance + 0;
-        users[msg.sender] = User(name, balance, 0, 0, 0, 0, address(0), 0);
+        users[msg.sender] = User(name, balance, 0, 1, 0, 0, address(0), 0);
         allUsers += 1;
         userAddr.push(msg.sender);
     }
 
     function RegisterReferal(string memory name, address referal) public ChekRegisterRefiral {
-        users[msg.sender] = User(name, 0, 0, 0, 0, 0, referal, 0);
+        uint balance = users[msg.sender].balance + 0;
+        users[msg.sender] = User(name, balance, 0, 1, 0, 0, referal, 0);
         users[referal].balance += 500;
         users[referal].referalCount += 1;
         allUsers += 1;
         userAddr.push(msg.sender);
     }
 
+    // sending in-game currency
     function Send(address recipient, uint amount) public CheckRegister {
         require(users[msg.sender].balance >= amount, "not enough balance");
         users[msg.sender].balance -= amount;
@@ -85,26 +89,17 @@ contract GameClicker {
 
     function Click() public CheckRegister checkTimeClick {}
 
+    // Purchase of an improvement
     function payUpdate() public CheckRegister {
         uint cost = clikAllUsers / allUsers;
         users[msg.sender].balance -= cost;
+        users[msg.sender].clickMultiplier++;
     }
 
-    function payment() public OnlyOwner {
-        require(DZBToken.allowance(msg.sender, address(this)) >= DZBToken.balanceOf(msg.sender));
-        for (uint i = 0; i < allUsers; i++) {
-            address userAddress = userId(i);
-            DZBToken.transferFrom(msg.sender, userAddress, users[userAddress].balance);
-            users[userAddress].balance = 0;
-        }
+    // sending tokens to players depending on their balance
+    function payment(address recipient) public {
+        require(users[recipient].balance >= 0, "negative balance");
+        DZBToken.transferFrom(msg.sender, recipient, users[recipient].balance);
+        users[recipient].balance = 0;
     }
-
-    function userId(uint i) internal view  returns (address) {
-        return userAddr[i];
-    }
-
-    function getBalance() public view returns (uint) {
-        return DZBToken.balanceOf(msg.sender);
-    }
-
 }
